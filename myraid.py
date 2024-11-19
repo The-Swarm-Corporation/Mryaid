@@ -521,33 +521,28 @@ class DynamicSocialNetwork:
 
 
 # Example usage
-def main():
-    network = DynamicSocialNetwork(
-        api_key=os.getenv("OPENAI_API_KEY"),
-        weaviate_url=os.getenv("WEAVIATE_URL"),
-        neo4j_uri=os.getenv("NEO4J_URI"),
-        neo4j_user=os.getenv("NEO4J_USER"),
-        neo4j_password=os.getenv("NEO4J_PASSWORD"),
+network = DynamicSocialNetwork(
+    api_key=os.getenv("OPENAI_API_KEY"),
+    weaviate_url=os.getenv("WEAVIATE_URL"),
+    neo4j_uri=os.getenv("NEO4J_URI"),
+    neo4j_user=os.getenv("NEO4J_USER"),
+    neo4j_password=os.getenv("NEO4J_PASSWORD"),
+)
+
+# Start multiple conversations
+conversations = network.initiate_conversations(5)
+
+# Print conversation details
+for conv_id, initiator, partner in conversations:
+    print(f"\nConversation {conv_id}:")
+    print(f"Between {initiator} and {partner}")
+    for (
+        message
+    ) in network.conversation_manager.conversation_history[
+        conv_id
+    ]:
+        print(f"{message['speaker']}: {message['message']}")
+    print(
+        "\nShared Interests:",
+        network.find_conversation_partners(initiator)[0][2],
     )
-
-    # Start multiple conversations
-    conversations = network.initiate_conversations(5)
-
-    # Print conversation details
-    for conv_id, initiator, partner in conversations:
-        print(f"\nConversation {conv_id}:")
-        print(f"Between {initiator} and {partner}")
-        for (
-            message
-        ) in network.conversation_manager.conversation_history[
-            conv_id
-        ]:
-            print(f"{message['speaker']}: {message['message']}")
-        print(
-            "\nShared Interests:",
-            network.find_conversation_partners(initiator)[0][2],
-        )
-
-
-if __name__ == "__main__":
-    main()
