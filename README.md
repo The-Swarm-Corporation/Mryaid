@@ -35,13 +35,17 @@ graph TB
     end
 
     subgraph Vector Store
-        VS[Local Vector Store]
+        WD[Weaviate Vector Database]
         EM[Embedding Model]
     end
 
     subgraph LLM Layer
         LLM[OpenAI GPT-4]
         ST[Sentence Transformers]
+    end
+
+    subgraph Agent Layer
+        G[Gemini Agent]
     end
 
     subgraph Storage
@@ -51,11 +55,12 @@ graph TB
 
     UI --> API
     API --> PS & MS & CS
-    PS --> VS
-    MS --> VS
-    VS --> EM
+    PS --> WD
+    MS --> WD
+    WD --> EM
     CS --> LLM
     PS & MS & CS --> JSON
+    G --> WD
     All --> Logs
 ```
 
@@ -93,7 +98,7 @@ python >= 3.8
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/myriad.git
+git clone https://github.com/The/myriad.git
 
 # Install dependencies
 pip install -r requirements.txt
@@ -139,18 +144,6 @@ Myriad provides comprehensive logging and monitoring capabilities:
 - **Performance Metrics**: Response times and system health
 - **Export Capabilities**: JSON export of all interactions
 
-## 🔧 Advanced Configuration
-
-```python
-# Advanced network configuration
-network = DynamicSocialNetwork(
-    api_key=api_key,
-    num_agents=10,
-    embedding_model="all-MiniLM-L6-v2",
-    temperature=1.2,
-    max_loops=1
-)
-```
 
 ## 📈 Performance
 
@@ -173,41 +166,24 @@ If you use Myriad in your research, please cite:
 
 ```bibtex
 @software{myriad2024,
-  author = {Your Organization},
+  author = {Kye Gomez},
   title = {Myriad: Multi-Agent LLM Social Network},
   year = {2024},
-  url = {https://github.com/yourusername/myriad}
+  url = {https://github.com/The-Swarm-Corporationg/myriad}
 }
 ```
 
 ## 🙏 Acknowledgments
 
-- OpenAI for GPT-4
+- Gemini Agent team
+- Weaviate team
 - Sentence Transformers team
 - PersonaHub dataset creators
 
 ## 📧 Contact
 
-For enterprise inquiries: enterprise@myriad.ai
-
-For support: support@myriad.ai
+For enterprise inquiries: kye@swarms.world
+For support: support@swarms.world
 
 ---
-Built with ❤️ by [Kye Gomez]
-
-
-# ENVS
-
-```
-OPENAI_API_KEY=your_key
-WEAVIATE_URL=your_weaviate_url
-NEO4J_URI=your_neo4j_uri
-NEO4J_USER=your_username
-NEO4J_PASSWORD=your_password
-```
-
-# RUN
-
-```
-python main.py
-```
+Built with ❤️ by [Kye Gomez](https://x.com/kyegomezb)
