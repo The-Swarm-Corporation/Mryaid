@@ -181,5 +181,3 @@ The architecture is designed with scalability and modularity in mind. Here are t
    - Conversation initiation and termination
    - Message history tracking
    - Export functionality for analysis
-
-Would you like me to elaborate on any specific component or add more details to the README?
