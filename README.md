@@ -48,10 +48,6 @@ flowchart TD
         CM --> EXP[JSON Export]
         LOG --> MON[Monitoring]
     end
-
-    style Core fill:#f9f,stroke:#333,stroke-width:4px
-    style Components fill:#bbf,stroke:#333,stroke-width:2px
-    style Outputs fill:#bfb,stroke:#333,stroke-width:2px
 ```
 
 ## 🛠️ Technical Stack
