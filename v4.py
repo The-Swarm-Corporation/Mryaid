@@ -19,16 +19,8 @@ logger.add(
     "social_simulation.log",
     rotation="500 MB",
     level="DEBUG",  # Changed to DEBUG for more detailed logging
-    format="{time:YYYY-MM-DD at HH:mm:ss} | {level} | {function}:{line} | {message}",
     backtrace=True,  # Enable backtrace
     diagnose=True,  # Enable diagnosis
-)
-
-# Add console logging for immediate feedback
-logger.add(
-    lambda msg: print(msg),
-    level="DEBUG",
-    format="{level} | {message}",
 )
 
 load_dotenv()
@@ -49,7 +41,7 @@ class Persona:
         """Create a Persona instance from a dataset entry"""
         try:
             # Print entry for debugging
-            logger.debug(f"Raw entry: {entry}")
+            logger.info(f"Raw entry: {entry}")
             
             # Extract fields directly from the dataset entry
             synthesized_text = str(entry['synthesized_text']) if 'synthesized_text' in entry else ""
@@ -60,7 +52,7 @@ class Persona:
             name_match = re.search(r"Name:\s*([^,\n]+)", synthesized_text)
             name = name_match.group(1).strip() if name_match else "Unknown"
             
-            logger.debug(f"""
+            logger.info(f"""
             Creating persona with:
             - Name: {name}
             - Description length: {len(description)}
@@ -167,7 +159,9 @@ class SocialAgent(Agent):
     def _generate_system_prompt(self) -> str:
         out = f"""You are {self.persona.name}. {self.persona.description}
 
-        Background: {self.persona.input_persona}
+        Background: {self.persona.synthesized_text}
+        
+        Your current persona: {self.persona.input_persona}
 
         Maintain this persona while engaging in natural conversations. Follow these conversation stages:
         1. Start with a friendly greeting and ask how they are
@@ -179,16 +173,16 @@ class SocialAgent(Agent):
         print(out)
         return out
 
-    def generate_message(self, context: str = "") -> str:
-        """Generate a message based on context"""
+    def generate_message(self, context: str = "", partner_name: str = "") -> str:
+        """Generate a message based on context and awareness of conversation partner"""
         try:
             if not context:
                 message = self.run(
-                    "Generate a friendly greeting and ask how they are."
+                    f"Generate a friendly greeting for {partner_name} and ask how they are."
                 )
             else:
                 message = self.run(
-                    f"Someone said: '{context}'. Respond naturally as {self.persona.name}."
+                    f"{partner_name} said: '{context}'. Respond naturally as {self.persona.name}."
                 )
 
             logger.info(
@@ -228,14 +222,14 @@ class ConversationManager:
             last_message = ""
             for turn in range(num_turns):
                 # Agent 1's turn
-                message1 = agent1.generate_message(last_message)
+                message1 = agent1.generate_message(last_message, agent2.persona.name)
                 self.add_message(
                     conv_id, agent1.persona.name, message1
                 )
                 last_message = message1
 
                 # Agent 2's turn
-                message2 = agent2.generate_message(last_message)
+                message2 = agent2.generate_message(last_message, agent1.persona.name)
                 self.add_message(
                     conv_id, agent2.persona.name, message2
                 )
@@ -307,22 +301,20 @@ class DynamicSocialNetwork:
         """Load specified number of personas from PersonaHub"""
         try:
             # Load the dataset
-            dataset = load_dataset("proj-persona/PersonaHub", "npc")  # Changed to "npc" split
+            dataset = load_dataset("proj-persona/PersonaHub", "npc")
             personas = []
             
             # Debug print the dataset structure
             logger.debug("Dataset Structure:")
             logger.debug(f"Available splits: {dataset.keys()}")
             logger.debug(f"First entry structure: {dataset['train'][0]}")
-            logger.debug(f"First entry keys: {dataset['train'][0].keys() if hasattr(dataset['train'][0], 'keys') else 'No keys method'}")
+            logger.debug(f"First entry keys: {dataset['train'][0].keys()}")
             
             # Process entries
-            for i, entry in enumerate(dataset['train'][:num_agents]):
+            for i, entry in enumerate(dataset['train']):
+                if i >= num_agents:
+                    break
                 try:
-                    # Convert entry to dictionary if it's not already
-                    if not isinstance(entry, dict):
-                        entry = dict(entry)
-                    
                     logger.debug(f"Processing entry {i}:")
                     logger.debug(f"Entry type: {type(entry)}")
                     logger.debug(f"Entry content: {entry}")
@@ -349,7 +341,7 @@ class DynamicSocialNetwork:
                     logger.error(f"Error loading individual persona {i}: {e}")
                     logger.error(f"Entry that caused error: {entry}")
                     continue
-            
+                    
             if not personas:
                 logger.warning("No personas were successfully loaded!")
                 
@@ -499,7 +491,7 @@ if __name__ == "__main__":
     logger.info("Starting main program")
     print(
         run_social_simulation(
-            num_agents=10,
+            num_agents=4,
             num_conversations=5,
             turns_per_conversation=4,
         )
