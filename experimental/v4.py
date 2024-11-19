@@ -8,7 +8,6 @@ import json
 import datetime
 import numpy as np
 from datasets import load_dataset
-from dotenv import load_dotenv
 from sentence_transformers import SentenceTransformer
 from swarms import Agent
 from swarm_models import OpenAIChat
@@ -19,11 +18,17 @@ logger.add(
     "social_simulation.log",
     rotation="500 MB",
     level="DEBUG",  # Changed to DEBUG for more detailed logging
+    format="{time:YYYY-MM-DD at HH:mm:ss} | {level} | {function}:{line} | {message}",
     backtrace=True,  # Enable backtrace
     diagnose=True,  # Enable diagnosis
 )
 
-load_dotenv()
+# Add console logging for immediate feedback
+logger.add(
+    lambda msg: print(msg),
+    level="DEBUG",
+    format="{level} | {message}",
+)
 
 
 @dataclass
@@ -42,35 +47,57 @@ class Persona:
         try:
             # Print entry for debugging
             logger.info(f"Raw entry: {entry}")
-            
+
             # Extract fields directly from the dataset entry
-            synthesized_text = str(entry['synthesized_text']) if 'synthesized_text' in entry else ""
-            input_persona = str(entry['input_persona']) if 'input_persona' in entry else ""
-            description = str(entry['description']) if 'description' in entry else ""
-            
+            synthesized_text = (
+                str(entry["synthesized_text"])
+                if "synthesized_text" in entry
+                else ""
+            )
+            input_persona = (
+                str(entry["input_persona"])
+                if "input_persona" in entry
+                else ""
+            )
+            description = (
+                str(entry["description"])
+                if "description" in entry
+                else ""
+            )
+
             # Extract name from synthesized text
-            name_match = re.search(r"Name:\s*([^,\n]+)", synthesized_text)
-            name = name_match.group(1).strip() if name_match else "Unknown"
-            
-            logger.info(f"""
+            name_match = re.search(
+                r"Name:\s*([^,\n]+)", synthesized_text
+            )
+            name = (
+                name_match.group(1).strip()
+                if name_match
+                else "Unknown"
+            )
+
+            logger.info(
+                f"""
             Creating persona with:
             - Name: {name}
             - Description length: {len(description)}
             - Input persona length: {len(input_persona)}
             - Synthesized text length: {len(synthesized_text)}
-            """)
-            
+            """
+            )
+
             return cls(
                 name=name,
                 description=description,
                 input_persona=input_persona,
-                synthesized_text=synthesized_text
+                synthesized_text=synthesized_text,
             )
-            
+
         except Exception as e:
             logger.error(f"Error creating persona: {e}")
             logger.error(f"Entry that caused error: {entry}")
-            raise ValueError(f"Failed to create persona from entry: {e}")
+            raise ValueError(
+                f"Failed to create persona from entry: {e}"
+            )
 
 
 class LocalVectorStore:
@@ -170,7 +197,9 @@ class SocialAgent(Agent):
         print(out)
         return out
 
-    def generate_message(self, context: str = "", partner_name: str = "") -> str:
+    def generate_message(
+        self, context: str = "", partner_name: str = ""
+    ) -> str:
         """Generate a message based on context and awareness of conversation partner"""
         try:
             if not context:
@@ -219,14 +248,18 @@ class ConversationManager:
             last_message = ""
             for turn in range(num_turns):
                 # Agent 1's turn
-                message1 = agent1.generate_message(last_message, agent2.persona.name)
+                message1 = agent1.generate_message(
+                    last_message, agent2.persona.name
+                )
                 self.add_message(
                     conv_id, agent1.persona.name, message1
                 )
                 last_message = message1
 
                 # Agent 2's turn
-                message2 = agent2.generate_message(last_message, agent1.persona.name)
+                message2 = agent2.generate_message(
+                    last_message, agent1.persona.name
+                )
                 self.add_message(
                     conv_id, agent2.persona.name, message2
                 )
@@ -284,7 +317,7 @@ class DynamicSocialNetwork:
     """Social network with local vector-based matching"""
 
     def __init__(self, api_key: str, num_agents: int = 10):
-        self.api_key = api_key
+        self.api_key = os.getenv("OPENAI_API_KEY")
         self.vector_store = LocalVectorStore()
         self.persona_hub = self._load_personas(num_agents)
         self.agents: Dict[str, SocialAgent] = {}
@@ -300,51 +333,69 @@ class DynamicSocialNetwork:
             # Load the dataset
             dataset = load_dataset("proj-persona/PersonaHub", "npc")
             personas = []
-            
+
             # Debug print the dataset structure
             logger.debug("Dataset Structure:")
             logger.debug(f"Available splits: {dataset.keys()}")
-            logger.debug(f"First entry structure: {dataset['train'][0]}")
-            logger.debug(f"First entry keys: {dataset['train'][0].keys()}")
-            
+            logger.debug(
+                f"First entry structure: {dataset['train'][0]}"
+            )
+            logger.debug(
+                f"First entry keys: {dataset['train'][0].keys()}"
+            )
+
             # Process entries
-            for i, entry in enumerate(dataset['train']):
+            for i, entry in enumerate(dataset["train"]):
                 if i >= num_agents:
                     break
                 try:
                     logger.debug(f"Processing entry {i}:")
                     logger.debug(f"Entry type: {type(entry)}")
                     logger.debug(f"Entry content: {entry}")
-                    
+
                     # Create persona with proper field access
                     persona = Persona(
                         name="Unknown",  # Will be updated from synthesized_text
-                        description=str(entry.get('description', '')),
-                        input_persona=str(entry.get('input_persona', '')),
-                        synthesized_text=str(entry.get('synthesized_text', ''))
+                        description=str(entry.get("description", "")),
+                        input_persona=str(
+                            entry.get("input_persona", "")
+                        ),
+                        synthesized_text=str(
+                            entry.get("synthesized_text", "")
+                        ),
                     )
-                    
+
                     # Try to extract name from synthesized text
-                    name_match = re.search(r"Name:\s*([^,\n]+)", persona.synthesized_text)
+                    name_match = re.search(
+                        r"Name:\s*([^,\n]+)", persona.synthesized_text
+                    )
                     if name_match:
                         persona.name = name_match.group(1).strip()
                     else:
                         persona.name = f"Persona_{i}"
-                    
+
                     personas.append(persona)
-                    logger.info(f"Successfully loaded persona: {persona.name}")
-                    
+                    logger.info(
+                        f"Successfully loaded persona: {persona.name}"
+                    )
+
                 except Exception as e:
-                    logger.error(f"Error loading individual persona {i}: {e}")
+                    logger.error(
+                        f"Error loading individual persona {i}: {e}"
+                    )
                     logger.error(f"Entry that caused error: {entry}")
                     continue
-                    
+
             if not personas:
-                logger.warning("No personas were successfully loaded!")
-                
-            logger.info(f"Successfully loaded {len(personas)} personas")
+                logger.warning(
+                    "No personas were successfully loaded!"
+                )
+
+            logger.info(
+                f"Successfully loaded {len(personas)} personas"
+            )
             return personas
-            
+
         except Exception as e:
             logger.error(f"Error loading personas from dataset: {e}")
             raise
@@ -489,7 +540,7 @@ if __name__ == "__main__":
     print(
         run_social_simulation(
             num_agents=4,
-            num_conversations=5,
-            turns_per_conversation=4,
+            num_conversations=2,
+            turns_per_conversation=2,
         )
     )
