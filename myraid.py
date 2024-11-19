@@ -1,163 +1,20 @@
+from loguru import logger
 import os
 import random
 import re
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
-
+from typing import Dict, List, Optional
+import json
+import datetime
 import numpy as np
 import weaviate
 from datasets import load_dataset
 from dotenv import load_dotenv
-from neo4j import GraphDatabase
 from sentence_transformers import SentenceTransformer
 from swarms import Agent
 from swarm_models import OpenAIChat
-import datetime
 
 load_dotenv()
-
-
-@dataclass
-class Persona:
-    """Represents a persona from PersonaHub"""
-
-    name: str
-    description: str
-    input_persona: str
-    synthesized_text: str
-
-    @classmethod
-    def from_dataset(cls, entry: Dict) -> "Persona":
-        """Create a Persona from a dataset entry"""
-        # Extract name using regex
-        name_match = re.search(
-            r"Name:\s*([^,\n]+)", entry["synthesized_text"]
-        )
-        name = (
-            name_match.group(1).strip() if name_match else "Unknown"
-        )
-
-        return cls(
-            name=name,
-            description=entry["description"],
-            input_persona=entry["input_persona"],
-            synthesized_text=entry["synthesized_text"],
-        )
-
-
-class PersonaHub:
-    """Manages loading and accessing personas"""
-
-    def __init__(self):
-        self.dataset = load_dataset(
-            "proj-persona/PersonaHub", "instruction"
-        )
-        self.personas: List[Persona] = []
-        self._load_personas()
-
-    def _load_personas(self):
-        """Load personas from the dataset"""
-        for entry in self.dataset["train"]:
-            try:
-                persona = Persona.from_dataset(entry)
-                self.personas.append(persona)
-            except Exception as e:
-                print(f"Error loading persona: {e}")
-
-    def get_random_personas(self, n: int = 100) -> List[Persona]:
-        """Get n random personas"""
-        return random.sample(
-            self.personas, min(n, len(self.personas))
-        )
-
-
-class SocialAgent(Agent):
-    """Enhanced agent with persona-based social capabilities"""
-
-    def __init__(self, persona: Persona, **kwargs):
-        self.persona = persona
-        system_prompt = self._generate_system_prompt()
-        super().__init__(system_prompt=system_prompt, **kwargs)
-        self.conversation_state = "initial"
-        self.current_partner = None
-
-    def _generate_system_prompt(self) -> str:
-        """Generate system prompt based on persona"""
-        return f"""You are {self.persona.name}. {self.persona.description}
-
-Background: {self.persona.input_persona}
-
-Maintain this persona while engaging in natural conversations. Follow these conversation stages:
-1. Start with a friendly greeting and ask how they are
-2. Share your name and ask for theirs
-3. Discuss what you do, based on your persona
-4. Engage in natural conversation about shared interests
-
-Always stay in character and respond as your persona would."""
-
-    def generate_greeting(self) -> str:
-        """Generate initial greeting"""
-        return self.run(
-            "Generate a friendly greeting and ask how they are."
-        )
-
-    def respond_to_greeting(self, message: str) -> str:
-        """Respond to a greeting and introduce yourself"""
-        return self.run(
-            f"Someone said: '{message}'. Respond and introduce yourself as {self.persona.name}."
-        )
-
-    def discuss_occupation(self, partner_name: str) -> str:
-        """Share what you do based on your persona"""
-        return self.run(
-            f"Tell {partner_name} what you do, based on your persona."
-        )
-
-
-class ConversationManager:
-    """Manages dynamic conversations between agents"""
-
-    def __init__(self):
-        self.active_conversations: Dict[str, tuple] = {}
-        self.conversation_history: Dict[str, List[Dict]] = {}
-
-    def start_conversation(
-        self, agent1: SocialAgent, agent2: SocialAgent
-    ) -> str:
-        """Initialize a natural conversation between two agents"""
-        conv_id = f"conv_{len(self.conversation_history)}_{random.randint(1000, 9999)}"
-        self.active_conversations[conv_id] = (agent1, agent2)
-        self.conversation_history[conv_id] = []
-
-        # Initial greeting
-        greeting = agent1.generate_greeting()
-        self.add_message(conv_id, agent1.persona.name, greeting)
-
-        # Response and introduction
-        response = agent2.respond_to_greeting(greeting)
-        self.add_message(conv_id, agent2.persona.name, response)
-
-        # Share occupations
-        occupation_share = agent1.discuss_occupation(
-            agent2.persona.name
-        )
-        self.add_message(
-            conv_id, agent1.persona.name, occupation_share
-        )
-
-        return conv_id
-
-    def add_message(
-        self, conv_id: str, speaker_name: str, message: str
-    ):
-        """Add a message to the conversation history"""
-        self.conversation_history[conv_id].append(
-            {
-                "speaker": speaker_name,
-                "message": message,
-                "timestamp": datetime.now().isoformat(),
-            }
-        )
 
 
 @dataclass
@@ -171,30 +28,95 @@ class Persona:
     embedding: Optional[np.ndarray] = None
 
     @classmethod
-    def from_dataset(cls, entry: Dict) -> "Persona":
-        name_match = re.search(
-            r"Name:\s*([^,\n]+)", entry["synthesized_text"]
-        )
+    def from_dataset(cls, entry) -> "Persona":
+        """Create a Persona instance from a dataset entry"""
+        # Convert dataset entry to dictionary if needed
+        if hasattr(entry, "keys"):
+            entry = dict(entry)
+        elif hasattr(entry, "_asdict"):
+            entry = entry._asdict()
+        elif not isinstance(entry, dict):
+            # Try to access attributes directly
+            try:
+                synthesized_text = (
+                    str(entry.synthesized_text)
+                    if hasattr(entry, "synthesized_text")
+                    else ""
+                )
+                description = (
+                    str(entry.description)
+                    if hasattr(entry, "description")
+                    else ""
+                )
+                input_persona = (
+                    str(entry.input_persona)
+                    if hasattr(entry, "input_persona")
+                    else ""
+                )
+
+                name_match = re.search(
+                    r"Name:\s*([^,\n]+)", synthesized_text
+                )
+                name = (
+                    name_match.group(1).strip()
+                    if name_match
+                    else "Unknown"
+                )
+
+                return cls(
+                    name=name,
+                    description=description,
+                    input_persona=input_persona,
+                    synthesized_text=synthesized_text,
+                )
+            except Exception as e:
+                raise ValueError(
+                    f"Unable to process dataset entry: {e}"
+                )
+
+        # Process dictionary entry
+        synthesized_text = entry.get("synthesized_text", "")
+        name_match = re.search(r"Name:\s*([^,\n]+)", synthesized_text)
         name = (
             name_match.group(1).strip() if name_match else "Unknown"
         )
+
         return cls(
             name=name,
-            description=entry["description"],
-            input_persona=entry["input_persona"],
-            synthesized_text=entry["synthesized_text"],
+            description=entry.get("description", ""),
+            input_persona=entry.get("input_persona", ""),
+            synthesized_text=synthesized_text,
         )
 
 
 class VectorStore:
-    """Enhanced Weaviate integration for persona matching"""
+    """Weaviate integration for persona matching"""
 
     def __init__(self, url: str):
-        self.client = weaviate.Client(url)
+        self.client = weaviate.Client(
+            url=os.getenv("WEAVIATE_URL"),
+            auth_client_secret=weaviate.auth.AuthApiKey(
+                api_key=os.getenv("WEAVIATE_API_KEY")
+            ),
+        )
         self.embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
         self._create_schema()
 
     def _create_schema(self):
+        """Create schema if it doesn't exist"""
+        # First check if schema exists
+        try:
+            existing_schema = self.client.schema.get()
+            if any(
+                class_obj["class"] == "Persona"
+                for class_obj in existing_schema["classes"]
+            ):
+                print("Persona schema already exists")
+                return
+        except Exception as e:
+            print(f"Error checking schema: {e}")
+
+        # Create schema only if it doesn't exist
         schema = {
             "classes": [
                 {
@@ -219,19 +141,19 @@ class VectorStore:
                 }
             ]
         }
+
         try:
             self.client.schema.create(schema)
+            print("Successfully created Persona schema")
         except Exception as e:
-            print(f"Schema already exists: {e}")
+            print(f"Error creating schema: {e}")
 
     def add_persona(self, persona: Persona):
         """Add persona to vector store with embedded representation"""
-        # Generate embedding from combined persona information
         text = f"{persona.description} {persona.input_persona}"
         embedding = self.embedding_model.encode(text)
         persona.embedding = embedding
 
-        # Extract interests using NLP (simplified version)
         interests = re.findall(
             r"interested in|likes|enjoys|passionate about\s+([^,.]+)",
             persona.synthesized_text.lower(),
@@ -254,7 +176,7 @@ class VectorStore:
     ) -> List[str]:
         """Find similar personas using vector similarity"""
         result = (
-            self.client.query.get("Persona", ["name", "interests"])
+            self.client.query.get("Persona", ["name"])
             .with_near_vector({"vector": persona.embedding.tolist()})
             .with_where(
                 {
@@ -275,145 +197,111 @@ class VectorStore:
         ]
 
 
-class GraphStore:
-    """Enhanced Neo4j integration for social relationships"""
+class SocialAgent(Agent):
+    """Enhanced agent with persona-based social capabilities"""
 
-    def __init__(self, uri: str, user: str, password: str):
-        self.driver = GraphDatabase.driver(uri, auth=(user, password))
-        self._initialize_db()
+    def __init__(self, persona: Persona, **kwargs):
+        self.persona = persona
+        system_prompt = self._generate_system_prompt()
+        super().__init__(system_prompt=system_prompt, **kwargs)
+        self.conversation_state = "initial"
+        self.current_partner = None
 
-    def _initialize_db(self):
-        with self.driver.session() as session:
-            # Create constraints
-            session.run(
-                "CREATE CONSTRAINT persona_name IF NOT EXISTS "
-                "FOR (p:Persona) REQUIRE p.name IS UNIQUE"
+    def _generate_system_prompt(self) -> str:
+        return f"""You are {self.persona.name}. {self.persona.description}
+
+Background: {self.persona.input_persona}
+
+Maintain this persona while engaging in natural conversations. Follow these conversation stages:
+1. Start with a friendly greeting and ask how they are
+2. Share your name and ask for theirs
+3. Discuss what you do, based on your persona
+4. Engage in natural conversation about shared interests
+
+Always stay in character and respond as your persona would."""
+
+    def generate_message(self, context: str = "") -> str:
+        """Generate a message based on context"""
+        if not context:
+            return self.run(
+                "Generate a friendly greeting and ask how they are."
             )
+        return self.run(
+            f"Someone said: '{context}'. Respond naturally as {self.persona.name}."
+        )
 
-            # Create indexes
-            session.run(
-                "CREATE INDEX persona_interests IF NOT EXISTS "
-                "FOR (p:Persona) ON (p.interests)"
-            )
 
-    def add_persona(self, persona: Persona):
-        """Add persona to graph database with relationships"""
-        with self.driver.session() as session:
-            # Create persona node with interests
-            interests = re.findall(
-                r"interested in|likes|enjoys|passionate about\s+([^,.]+)",
-                persona.synthesized_text.lower(),
-            )
+class ConversationManager:
+    """Manages dynamic conversations between agents"""
 
-            session.run(
-                """
-                MERGE (p:Persona {name: $name})
-                SET p.description = $description,
-                    p.interests = $interests,
-                    p.availability = true
-                """,
-                name=persona.name,
-                description=persona.description,
-                interests=interests,
-            )
+    def __init__(self):
+        self.conversation_history: Dict[str, List[Dict]] = {}
 
-            # Create interest relationships
-            for interest in interests:
-                session.run(
-                    """
-                    MERGE (i:Interest {name: $interest})
-                    WITH i
-                    MATCH (p:Persona {name: $name})
-                    MERGE (p)-[:INTERESTED_IN]->(i)
-                    """,
-                    interest=interest.strip(),
-                    name=persona.name,
-                )
-
-    def record_interaction(
+    def start_conversation(
         self,
-        persona1: str,
-        persona2: str,
-        interaction_type: str = "CONVERSED_WITH",
+        agent1: SocialAgent,
+        agent2: SocialAgent,
+        num_turns: int = 4,
+    ) -> str:
+        """Initialize a conversation between two agents for specified number of turns"""
+        conv_id = f"conv_{len(self.conversation_history)}_{random.randint(1000, 9999)}"
+        self.conversation_history[conv_id] = []
+
+        # Initial greeting
+        last_message = ""
+        for _ in range(num_turns):
+            # Agent 1's turn
+            message1 = agent1.generate_message(last_message)
+            self.add_message(conv_id, agent1.persona.name, message1)
+            last_message = message1
+
+            # Agent 2's turn
+            message2 = agent2.generate_message(last_message)
+            self.add_message(conv_id, agent2.persona.name, message2)
+            last_message = message2
+
+        return conv_id
+
+    def add_message(
+        self, conv_id: str, speaker_name: str, message: str
     ):
-        """Record interaction between personas"""
-        with self.driver.session() as session:
-            session.run(
-                """
-                MATCH (p1:Persona {name: $name1})
-                MATCH (p2:Persona {name: $name2})
-                MERGE (p1)-[r:INTERACTION]->(p2)
-                ON CREATE SET r.count = 1, r.type = $type
-                ON MATCH SET r.count = r.count + 1,
-                            r.lastInteraction = datetime()
-                """,
-                name1=persona1,
-                name2=persona2,
-                type=interaction_type,
-            )
+        """Add a message to the conversation history"""
+        self.conversation_history[conv_id].append(
+            {
+                "speaker": speaker_name,
+                "message": message,
+                "timestamp": datetime.datetime.now().isoformat(),
+            }
+        )
 
-    def find_recommended_partners(
-        self, persona_name: str, limit: int = 5
-    ) -> List[str]:
-        """Find recommended conversation partners based on graph patterns"""
-        with self.driver.session() as session:
-            result = session.run(
-                """
-                MATCH (p:Persona {name: $name})-[:INTERESTED_IN]->(i:Interest)
-                MATCH (other:Persona)-[:INTERESTED_IN]->(i)
-                WHERE other.name <> $name
-                AND other.availability = true
-                WITH other, count(distinct i) as shared_interests,
-                     collect(distinct i.name) as interests
-                ORDER BY shared_interests DESC, rand()
-                LIMIT $limit
-                RETURN other.name as name, shared_interests, interests
-                """,
-                name=persona_name,
-                limit=limit,
-            )
-
-            return [
-                (
-                    record["name"],
-                    record["shared_interests"],
-                    record["interests"],
-                )
-                for record in result
-            ]
+    def export_conversations(
+        self, filename: str = "conversation_history.json"
+    ):
+        """Export all conversations to JSON file"""
+        with open(filename, "w") as f:
+            json.dump(self.conversation_history, f, indent=2)
 
 
 class DynamicSocialNetwork:
-    """Integrated social network with enhanced matching capabilities"""
+    """Social network with Weaviate-based matching"""
 
     def __init__(
-        self,
-        api_key: str,
-        weaviate_url: str,
-        neo4j_uri: str,
-        neo4j_user: str,
-        neo4j_password: str,
+        self, api_key: str, weaviate_url: str, num_agents: int = 10
     ):
         self.api_key = api_key
         self.vector_store = VectorStore(weaviate_url)
-        self.graph_store = GraphStore(
-            neo4j_uri, neo4j_user, neo4j_password
-        )
-        self.persona_hub = self._load_personas()
+        self.persona_hub = self._load_personas(num_agents)
         self.agents: Dict[str, SocialAgent] = {}
         self.conversation_manager = ConversationManager()
-
         self._initialize_network()
 
-    def _load_personas(self) -> List[Persona]:
-        """Load personas from PersonaHub"""
+    def _load_personas(self, num_agents: int) -> List[Persona]:
+        """Load specified number of personas from PersonaHub"""
         dataset = load_dataset(
             "proj-persona/PersonaHub", "instruction"
         )
         personas = []
-        for entry in dataset["train"][
-            :100
-        ]:  # Load first 100 personas
+        for entry in dataset["train"][:num_agents]:
             try:
                 persona = Persona.from_dataset(entry)
                 personas.append(persona)
@@ -424,14 +312,13 @@ class DynamicSocialNetwork:
     def _initialize_network(self):
         """Initialize the network with personas and agents"""
         for persona in self.persona_hub:
-            # Add to vector and graph stores
+            # Add to vector store
             self.vector_store.add_persona(persona)
-            self.graph_store.add_persona(persona)
 
             # Create agent
             model = OpenAIChat(
                 openai_api_key=self.api_key,
-                model_name="gpt-4-mini",
+                model_name="gpt-4",
                 temperature=0.7,
             )
 
@@ -446,44 +333,14 @@ class DynamicSocialNetwork:
 
             self.agents[persona.name] = agent
 
-    def find_conversation_partners(
-        self, persona_name: str, n: int = 3
-    ) -> List[Tuple[str, float, List[str]]]:
-        """Find potential conversation partners using both vector and graph approaches"""
-        # Get vector-based matches
-        vector_matches = set(
-            self.vector_store.find_similar_personas(
-                self.agents[persona_name].persona, limit=n
-            )
-        )
-
-        # Get graph-based recommendations
-        graph_matches = self.graph_store.find_recommended_partners(
-            persona_name, limit=n
-        )
-        graph_names = {match[0] for match in graph_matches}
-
-        # Combine and score matches
-        all_matches = []
-        for name in vector_matches.union(graph_names):
-            score = (
-                1
-                if name in vector_matches
-                else 0 + 2 if name in graph_names else 0
-            )
-            interests = next(
-                (m[2] for m in graph_matches if m[0] == name), []
-            )
-            all_matches.append((name, score, interests))
-
-        # Sort by score and return top N
-        all_matches.sort(key=lambda x: x[1], reverse=True)
-        return all_matches[:n]
-
-    def initiate_conversations(self, num_conversations: int = 5):
-        """Start multiple dynamic conversations between compatible agents"""
-        available_agents = list(self.agents.keys())
+    def run_conversations(
+        self,
+        num_conversations: int = 5,
+        turns_per_conversation: int = 4,
+    ):
+        """Run multiple conversations between compatible agents"""
         conversations = []
+        available_agents = list(self.agents.keys())
 
         for _ in range(num_conversations):
             if len(available_agents) < 2:
@@ -493,10 +350,14 @@ class DynamicSocialNetwork:
             initiator_name = random.choice(available_agents)
             available_agents.remove(initiator_name)
 
-            # Find compatible partners
-            partners = self.find_conversation_partners(initiator_name)
-            if partners:
-                partner_name = partners[0][0]
+            # Find similar partners using Weaviate
+            partner_candidates = (
+                self.vector_store.find_similar_personas(
+                    self.agents[initiator_name].persona
+                )
+            )
+
+            for partner_name in partner_candidates:
                 if partner_name in available_agents:
                     available_agents.remove(partner_name)
 
@@ -505,44 +366,55 @@ class DynamicSocialNetwork:
                         self.conversation_manager.start_conversation(
                             self.agents[initiator_name],
                             self.agents[partner_name],
+                            turns_per_conversation,
                         )
-                    )
-
-                    # Record interaction
-                    self.graph_store.record_interaction(
-                        initiator_name, partner_name
                     )
 
                     conversations.append(
                         (conv_id, initiator_name, partner_name)
                     )
+                    break
 
+        # Export conversation history
+        self.conversation_manager.export_conversations()
         return conversations
 
 
 # Example usage
-network = DynamicSocialNetwork(
-    api_key=os.getenv("OPENAI_API_KEY"),
-    weaviate_url=os.getenv("WEAVIATE_URL"),
-    neo4j_uri=os.getenv("NEO4J_URI"),
-    neo4j_user=os.getenv("NEO4J_USER"),
-    neo4j_password=os.getenv("NEO4J_PASSWORD"),
-)
+def run_social_simulation(
+    num_agents: int = 10,
+    num_conversations: int = 5,
+    turns_per_conversation: int = 4,
+):
+    network = DynamicSocialNetwork(
+        api_key=os.getenv("OPENAI_API_KEY"),
+        weaviate_url=os.getenv("WEAVIATE_URL"),
+        num_agents=num_agents,
+    )
 
-# Start multiple conversations
-conversations = network.initiate_conversations(5)
+    # Start multiple conversations
+    conversations = network.run_conversations(
+        num_conversations, turns_per_conversation
+    )
+    logger.info(f"Conversations: {conversations}")
 
-# Print conversation details
-for conv_id, initiator, partner in conversations:
-    print(f"\nConversation {conv_id}:")
-    print(f"Between {initiator} and {partner}")
-    for (
-        message
-    ) in network.conversation_manager.conversation_history[
-        conv_id
-    ]:
-        print(f"{message['speaker']}: {message['message']}")
+    # Print conversation details
+    for conv_id, initiator, partner in conversations:
+        print(f"\nConversation {conv_id}:")
+        print(f"Between {initiator} and {partner}")
+        for (
+            message
+        ) in network.conversation_manager.conversation_history[
+            conv_id
+        ]:
+            print(f"{message['speaker']}: {message['message']}")
+
+
+if __name__ == "__main__":
     print(
-        "\nShared Interests:",
-        network.find_conversation_partners(initiator)[0][2],
+        run_social_simulation(
+            num_agents=10,
+            num_conversations=5,
+            turns_per_conversation=4,
+        )
     )
