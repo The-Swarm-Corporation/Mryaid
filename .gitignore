@@ -7,6 +7,8 @@ __pycache__/
 *.so
 .vscode/
 .vscode
+agent_workspace/
+agent_workspace
 
 # Distribution / packaging
 .Python
