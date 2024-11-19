@@ -9,6 +9,7 @@ __pycache__/
 .vscode
 agent_workspace/
 agent_workspace
+agent_workspace
 
 # Distribution / packaging
 .Python
