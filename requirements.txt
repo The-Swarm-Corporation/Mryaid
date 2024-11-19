@@ -1,3 +1,8 @@
-torch
-zetascale
+numpy
+weaviate-client
+datasets
+python-dotenv
+neo4j
+sentence-transformers
 swarms
+python-swarms-models
