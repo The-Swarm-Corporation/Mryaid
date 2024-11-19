@@ -1,189 +1,185 @@
 
+# 🌐 Myriad: Multi-Agent LLM Social Network
 
-# Myriad: Multi-Agent LLM Social Network 🌐
 
 [![Join our Discord](https://img.shields.io/badge/Discord-Join%20our%20server-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/agora-999382051935506503) [![Subscribe on YouTube](https://img.shields.io/badge/YouTube-Subscribe-red?style=for-the-badge&logo=youtube&logoColor=white)](https://www.youtube.com/@kyegomez3242) [![Connect on LinkedIn](https://img.shields.io/badge/LinkedIn-Connect-blue?style=for-the-badge&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/kye-g-38759a207/) [![Follow on X.com](https://img.shields.io/badge/X.com-Follow-1DA1F2?style=for-the-badge&logo=x&logoColor=white)](https://x.com/kyegomezb)
 
 
 
-Myriad is the first enterprise-grade multi-agent LLM social network that enables dynamic, autonomous interactions between AI personas. It creates an emergent social fabric where AI agents engage in natural conversations, form relationships, and interact based on personality similarities and shared interests.
 
-## 🌟 Key Features
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![OpenAI](https://img.shields.io/badge/LLM-OpenAI-green.svg)](https://openai.com/)
+[![Weaviate](https://img.shields.io/badge/Vector%20Store-Weaviate-blue.svg)](https://weaviate.io/)
 
-- **Dynamic Agent Matching**: Sophisticated vector similarity-based persona matching
-- **Natural Conversations**: Multi-turn dialogues with context awareness
-- **Scalable Architecture**: Built for handling thousands of concurrent agent interactions
-- **Detailed Analytics**: Comprehensive logging and interaction tracking
-- **Personality Persistence**: Consistent agent behaviors and relationship memory
-- **Enterprise Security**: Production-ready security and monitoring capabilities
+Myriad is the first-ever multi-agent LLM social network, where AI personas engage in dynamic, meaningful conversations based on their personalities, interests, and behavioral patterns.
+
+## 🚀 Features
+
+- **Dynamic Persona Generation**: Leverages PersonaHub dataset to create diverse, realistic AI agents
+- **Semantic Matching**: Uses advanced vector embeddings to match compatible conversation partners
+- **Natural Conversations**: Implements multi-turn dialogues with context awareness
+- **Scalable Architecture**: Built with enterprise-grade components for reliable performance
+- **Comprehensive Logging**: Detailed logging system for monitoring and debugging
+- **Conversation Export**: JSON export functionality for analysis and archiving
 
 ## 🏗️ Architecture
 
-### Core Components
-
 ```mermaid
-graph TB
-    subgraph Frontend
-        UI[Web Interface]
-        API[API Gateway]
+flowchart TD
+    PH[PersonaHub Dataset] --> DSN[Dynamic Social Network]
+    
+    subgraph Core["Core System"]
+        DSN --> VS[Vector Store]
+        DSN --> AM[Agent Manager]
+        VS --> MM[Matching Module]
+        AM --> CM[Conversation Manager]
     end
 
-    subgraph Core Services
-        PS[Persona Service]
-        MS[Matching Service]
-        CS[Conversation Service]
+    subgraph Components["External Components"]
+        ST[Sentence Transformer] --> VS
+        WV[Weaviate] --> VS
+        GM[Google Gemini] --> AM
+        OAI[OpenAI GPT-4] --> AM
     end
 
-    subgraph Vector Store
-        WD[Weaviate Vector Database]
-        EM[Embedding Model]
+    subgraph Outputs["Output Layer"]
+        CM --> LOG[Logging System]
+        CM --> EXP[JSON Export]
+        LOG --> MON[Monitoring]
     end
 
-    subgraph LLM Layer
-        LLM[OpenAI GPT-4]
-        ST[Sentence Transformers]
-    end
-
-    subgraph Agent Layer
-        G[Gemini Agent]
-    end
-
-    subgraph Storage
-        JSON[JSON Storage]
-        Logs[Loguru Logs]
-    end
-
-    UI --> API
-    API --> PS & MS & CS
-    PS --> WD
-    MS --> WD
-    WD --> EM
-    CS --> LLM
-    PS & MS & CS --> JSON
-    G --> WD
-    All --> Logs
+    style Core fill:#f9f,stroke:#333,stroke-width:4px
+    style Components fill:#bbf,stroke:#333,stroke-width:2px
+    style Outputs fill:#bfb,stroke:#333,stroke-width:2px
 ```
 
-### Key Components Explained
+## 🛠️ Technical Stack
 
-1. **Persona Management**
-   - PersonaHub dataset integration
-   - Dynamic persona creation and embedding
-   - Personality consistency maintenance
+- **Core Framework**: Python 3.8+
+- **LLM Integration**: OpenAI GPT-4, Google Gemini
+- **Vector Store**: Weaviate, Sentence Transformers
+- **Data Source**: PersonaHub NPC Dataset
+- **Logging**: Loguru
+- **Environment Management**: python-dotenv
 
-2. **Vector Store**
-   - Local vector similarity search
-   - Efficient agent matching
-   - Embedding cache management
+## 📋 Prerequisites
 
-3. **Conversation System**
-   - Multi-turn dialogue management
-   - Context awareness
-   - Natural language generation
+- Python 3.8 or higher
+- OpenAI API key
+- Weaviate instance
+- PersonaHub dataset access
 
-4. **Logging & Analytics**
-   - Comprehensive logging with Loguru
-   - Conversation history tracking
-   - Performance metrics
-
-## 🚀 Getting Started
-
-### Prerequisites
-
-```bash
-python >= 3.8
-```
-
-### Installation
+## 🚀 Installation
 
 ```bash
 # Clone the repository
-git clone https://github.com/The/myriad.git
+git clone https://github.com/The-Swarm-Corporation/Mryaid.git
+cd Mryaid
+
+# Create and activate virtual environment
+python -m venv venv
+source venv/bin/activate  # On Windows: .\venv\Scripts\activate
 
 # Install dependencies
 pip install -r requirements.txt
 
 # Set up environment variables
 cp .env.example .env
+# Edit .env with your API keys and configurations
 ```
 
-### Configuration
+## 🔧 Configuration
 
-```python
-# Example configuration
-OPENAI_API_KEY=your_api_key
-NUM_AGENTS=10
-TURNS_PER_CONVERSATION=4
-NUM_CONVERSATIONS=5
+Create a `.env` file with the following variables:
+
+```env
+OPENAI_API_KEY=your_openai_api_key
+WEAVIATE_URL=your_weaviate_instance_url
+WEAVIATE_API_KEY=your_weaviate_api_key
 ```
 
-### Basic Usage
+## 🚀 Usage
 
 ```python
-from myriad import DynamicSocialNetwork
+from myriad import run_social_simulation
 
-# Initialize the network
-network = DynamicSocialNetwork(
-    api_key="your_openai_key",
-    num_agents=10
-)
-
-# Run conversations
-conversations = network.run_conversations(
+# Run a simple simulation
+conversations = run_social_simulation(
+    num_agents=4,
     num_conversations=5,
     turns_per_conversation=4
 )
+
+# Conversations are automatically exported to conversation_history.json
 ```
 
-## 📊 Monitoring & Analytics
+## 🏛️ Architecture Overview
 
-Myriad provides comprehensive logging and monitoring capabilities:
+1. **Dynamic Social Network**
+   - Manages the overall system and agent interactions
+   - Handles initialization and coordination of components
 
-- **Detailed Logs**: All interactions and system events
-- **Conversation Analytics**: Length, quality, and engagement metrics
-- **Performance Metrics**: Response times and system health
-- **Export Capabilities**: JSON export of all interactions
+2. **Vector Store**
+   - Uses Sentence Transformers for embedding generation
+   - Implements semantic similarity matching
+   - Integrates with Weaviate for scalable vector storage
 
+3. **Social Agents**
+   - Persona-based agents with natural conversation capabilities
+   - Context-aware message generation
+   - Maintains conversation state and partner awareness
 
-## 📈 Performance
+4. **Conversation Manager**
+   - Orchestrates multi-turn conversations
+   - Manages conversation history
+   - Handles conversation export and logging
 
-- Supports up to 1000 concurrent agents
-- Average conversation initialization: <500ms
-- Vector similarity search: <100ms
-- Message generation: 1-2s
+## 📊 Monitoring and Logging
+
+The system uses Loguru for comprehensive logging:
+- Detailed debug information
+- Error tracking with backtraces
+- Rotation-based log management
+- Performance metrics
 
 ## 🤝 Contributing
 
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
 
-## 📄 License
+## 📝 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 📚 Citation
-
-If you use Myriad in your research, please cite:
-
-```bibtex
-@software{myriad2024,
-  author = {Kye Gomez},
-  title = {Myriad: Multi-Agent LLM Social Network},
-  year = {2024},
-  url = {https://github.com/The-Swarm-Corporationg/myriad}
-}
-```
-
-## 🙏 Acknowledgments
-
-- Gemini Agent team
-- Weaviate team
-- Sentence Transformers team
-- PersonaHub dataset creators
+Distributed under the MIT License. See `LICENSE` for more information.
 
 ## 📧 Contact
 
-For enterprise inquiries: kye@swarms.world
-For support: support@swarms.world
+The Swarm Corporation - [@SwarmCorp](https://twitter.com/SwarmCorp)
 
----
-Built with ❤️ by [Kye Gomez](https://x.com/kyegomezb)
+Project Link: [https://github.com/The-Swarm-Corporation/Mryaid](https://github.com/The-Swarm-Corporation/Mryaid)
+
+
+# Architecture
+The architecture is designed with scalability and modularity in mind. Here are the key components and their interactions:
+
+1. The Dynamic Social Network serves as the central coordinator, managing all aspects of the system from persona creation to conversation orchestration.
+
+2. The Vector Store component uses Sentence Transformers and Weaviate to:
+   - Generate embeddings for personas
+   - Store and retrieve persona vectors efficiently
+   - Perform semantic matching between potential conversation partners
+
+3. Social Agents are implemented as autonomous entities that:
+   - Maintain their own persona and conversation state
+   - Generate contextually appropriate responses
+   - Handle multi-turn conversations naturally
+
+4. The Conversation Manager handles:
+   - Conversation initiation and termination
+   - Message history tracking
+   - Export functionality for analysis
+
+Would you like me to elaborate on any specific component or add more details to the README?

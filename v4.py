@@ -80,9 +80,6 @@ class LocalVectorStore:
         self.embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
         self.personas: Dict[str, Persona] = {}
         self.embeddings: Dict[str, np.ndarray] = {}
-        logger.info(
-            "Initialized LocalVectorStore with embedding model"
-        )
 
     def add_persona(self, persona: Persona) -> None:
         """Add persona to vector store with embedded representation"""
