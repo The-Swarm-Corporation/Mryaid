@@ -1,17 +1,163 @@
 import os
-import re
-from typing import List, Dict, Optional, Tuple
-from dataclasses import dataclass
 import random
+import re
+from dataclasses import dataclass
+from typing import Dict, List, Optional, Tuple
+
 import numpy as np
-from datasets import load_dataset
-from sentence_transformers import SentenceTransformer
 import weaviate
-from neo4j import GraphDatabase
-from swarms_models import OpenAIChat
+from datasets import load_dataset
 from dotenv import load_dotenv
+from neo4j import GraphDatabase
+from sentence_transformers import SentenceTransformer
+from swarms import Agent
+from swarm_models import OpenAIChat
+import datetime
 
 load_dotenv()
+
+
+@dataclass
+class Persona:
+    """Represents a persona from PersonaHub"""
+
+    name: str
+    description: str
+    input_persona: str
+    synthesized_text: str
+
+    @classmethod
+    def from_dataset(cls, entry: Dict) -> "Persona":
+        """Create a Persona from a dataset entry"""
+        # Extract name using regex
+        name_match = re.search(
+            r"Name:\s*([^,\n]+)", entry["synthesized_text"]
+        )
+        name = (
+            name_match.group(1).strip() if name_match else "Unknown"
+        )
+
+        return cls(
+            name=name,
+            description=entry["description"],
+            input_persona=entry["input_persona"],
+            synthesized_text=entry["synthesized_text"],
+        )
+
+
+class PersonaHub:
+    """Manages loading and accessing personas"""
+
+    def __init__(self):
+        self.dataset = load_dataset(
+            "proj-persona/PersonaHub", "instruction"
+        )
+        self.personas: List[Persona] = []
+        self._load_personas()
+
+    def _load_personas(self):
+        """Load personas from the dataset"""
+        for entry in self.dataset["train"]:
+            try:
+                persona = Persona.from_dataset(entry)
+                self.personas.append(persona)
+            except Exception as e:
+                print(f"Error loading persona: {e}")
+
+    def get_random_personas(self, n: int = 100) -> List[Persona]:
+        """Get n random personas"""
+        return random.sample(
+            self.personas, min(n, len(self.personas))
+        )
+
+
+class SocialAgent(Agent):
+    """Enhanced agent with persona-based social capabilities"""
+
+    def __init__(self, persona: Persona, **kwargs):
+        self.persona = persona
+        system_prompt = self._generate_system_prompt()
+        super().__init__(system_prompt=system_prompt, **kwargs)
+        self.conversation_state = "initial"
+        self.current_partner = None
+
+    def _generate_system_prompt(self) -> str:
+        """Generate system prompt based on persona"""
+        return f"""You are {self.persona.name}. {self.persona.description}
+
+Background: {self.persona.input_persona}
+
+Maintain this persona while engaging in natural conversations. Follow these conversation stages:
+1. Start with a friendly greeting and ask how they are
+2. Share your name and ask for theirs
+3. Discuss what you do, based on your persona
+4. Engage in natural conversation about shared interests
+
+Always stay in character and respond as your persona would."""
+
+    def generate_greeting(self) -> str:
+        """Generate initial greeting"""
+        return self.run(
+            "Generate a friendly greeting and ask how they are."
+        )
+
+    def respond_to_greeting(self, message: str) -> str:
+        """Respond to a greeting and introduce yourself"""
+        return self.run(
+            f"Someone said: '{message}'. Respond and introduce yourself as {self.persona.name}."
+        )
+
+    def discuss_occupation(self, partner_name: str) -> str:
+        """Share what you do based on your persona"""
+        return self.run(
+            f"Tell {partner_name} what you do, based on your persona."
+        )
+
+
+class ConversationManager:
+    """Manages dynamic conversations between agents"""
+
+    def __init__(self):
+        self.active_conversations: Dict[str, tuple] = {}
+        self.conversation_history: Dict[str, List[Dict]] = {}
+
+    def start_conversation(
+        self, agent1: SocialAgent, agent2: SocialAgent
+    ) -> str:
+        """Initialize a natural conversation between two agents"""
+        conv_id = f"conv_{len(self.conversation_history)}_{random.randint(1000, 9999)}"
+        self.active_conversations[conv_id] = (agent1, agent2)
+        self.conversation_history[conv_id] = []
+
+        # Initial greeting
+        greeting = agent1.generate_greeting()
+        self.add_message(conv_id, agent1.persona.name, greeting)
+
+        # Response and introduction
+        response = agent2.respond_to_greeting(greeting)
+        self.add_message(conv_id, agent2.persona.name, response)
+
+        # Share occupations
+        occupation_share = agent1.discuss_occupation(
+            agent2.persona.name
+        )
+        self.add_message(
+            conv_id, agent1.persona.name, occupation_share
+        )
+
+        return conv_id
+
+    def add_message(
+        self, conv_id: str, speaker_name: str, message: str
+    ):
+        """Add a message to the conversation history"""
+        self.conversation_history[conv_id].append(
+            {
+                "speaker": speaker_name,
+                "message": message,
+                "timestamp": datetime.now().isoformat(),
+            }
+        )
 
 
 @dataclass
